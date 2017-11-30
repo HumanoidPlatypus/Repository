@@ -21,6 +21,9 @@ coord_points = [[10, 200], [390, 200]]
 resistors_resistances = []
 calculation_info = []
 
+psave_info = []
+rsave_info = ['#']
+
 ResistorNum = 1
 PointNum = 0
 
@@ -54,6 +57,8 @@ class point:
     data = {'x': 0, 'y': 0}
     
     def load_point(self, ResistorCanvas, Resistor):
+        global psave_info
+        
         self.point = ResistorCanvas.create_oval(self.xpoint + 4, self.ypoint + 4, self.xpoint - 4, self.ypoint - 4, width = 0, tags = 'point' + str(self.num), fill = self.color)
         
         ResistorCanvas.addtag_withtag('point', 'point' + str(self.num))
@@ -61,6 +66,8 @@ class point:
         ResistorCanvas.tag_bind('point' + str(self.num), '<ButtonPress-1>', self.point_press)
         ResistorCanvas.tag_bind('point' + str(self.num), '<ButtonRelease-1>', self.point_release)
         ResistorCanvas.tag_bind('point' + str(self.num), '<B1-Motion>', self.point_motion)
+        
+        psave_info.append([self.xpoint, self.ypoint, self.color])
     
     def point_press(self, event):
         self.data['x'] = event.x
@@ -82,6 +89,9 @@ class point:
             
             self.xpoint += delta_x
             self.ypoint += delta_y
+            
+            psave_info[self.num][0] = self.xpoint
+            psave_info[self.num][1] = self.ypoint
             
             ResistorCanvas.move(self.point, delta_x, delta_y)
             
@@ -105,17 +115,25 @@ class resistor:
     data = {'x': 0, 'y': 0}
     
     def load(self, ResistorCanvas, Resistor):
-        global coord_points, resistance_label, resistors_resistances, calculation_info
+        global coord_points, resistance_label, resistors_resistances, calculation_info, rsave_info
         
         resistors_resistances.append(self.resistance)
         label_rewrite(resistors_resistances)
         
         calculation_info.append([self.startpoint, self.endpoint, self.resistance])
         
-        self.xstart = coord_points[0][0]
-        self.ystart = coord_points[0][1]
-        self.xend = coord_points[1][0]
-        self.yend = coord_points[1][1]        
+        if self.startpoint == 0:
+            self.xstart = coord_points[0][0]
+            self.ystart = coord_points[0][1]
+        if self.endpoint == 1:
+            self.xend = coord_points[1][0]
+            self.yend = coord_points[1][1]  
+        if self.startpoint == 1:
+            self.xstart = coord_points[1][0]
+            self.ystart = coord_points[1][1]
+        if self.endpoint == 0:
+            self.xend = coord_points[0][0]
+            self.yend = coord_points[0][1]
         
         self.line1 = ResistorCanvas.create_line(self.xstart, self.ystart, self.xbody, self.ybody + 10, width = 3)
         self.line2 = ResistorCanvas.create_line(self.xbody + 40, self.ybody + 10, self.xend, self.yend, width = 3)
@@ -138,6 +156,8 @@ class resistor:
         ResistorCanvas.tag_bind('get2' + str(self.num), '<ButtonPress-1>', self.get2_press)
         ResistorCanvas.tag_bind('get2' + str(self.num), '<ButtonRelease-1>', self.get2_release)
         ResistorCanvas.tag_bind('get2' + str(self.num), '<B1-Motion>', self.get2_motion)         
+   
+        rsave_info.append([self.xbody, self.ybody, self.xstart, self.ystart, self.xend, self.yend, self.startpoint, self.endpoint, self.resistance])
     
     def body_press(self, event):
         self.data['x'] = event.x
@@ -160,6 +180,8 @@ class resistor:
         self.resistance_text = ResistorCanvas.create_text(self.xbody + 20, self.ybody + 10, text = 'R' + str(self.num), justify = 'center', tags = 'resistor' + str(self.num))
 
     def body_motion(self, event):
+        global rsave_info
+        
         if event.x > 0 and event.x < 400 and event.y > 0 and event.y < 400:
             ResistorCanvas.itemconfig(self.body, outline = 'gray', fill = 'gray')
             
@@ -169,9 +191,11 @@ class resistor:
             self.xbody += delta_x
             self.ybody += delta_y
             
+            rsave_info[self.num][0] = self.xbody
+            rsave_info[self.num][1] = self.ybody
+            
             ResistorCanvas.move(self.body, delta_x, delta_y)
             ResistorCanvas.move(self.resistance_text, delta_x, delta_y)
-            
             
             ResistorCanvas.delete(self.line1)
             ResistorCanvas.delete(self.line2)
@@ -215,13 +239,17 @@ class resistor:
     def OK_action(self, event):
         global resistance_label, resistors_resistances
         
-        self.resistance = int(self.input.get())
+        resistance = self.input.get()
         
-        resistors_resistances[self.num - 1] = self.resistance
-        label_rewrite(resistors_resistances)
+        if resistance != '0' and resistance.count('1') + resistance.count('2') + resistance.count('3') + resistance.count('4') + resistance.count('5') + resistance.count('6') + resistance.count('7') + resistance.count('8') + resistance.count('9') + resistance.count('0') + resistance.count('.') == len(resistance) and resistance.count('.') < 2:        
+            self.resistance = float(self.input.get())
         
-        calculation_info[self.num - 1][2] = self.resistance
+            resistors_resistances[self.num - 1] = self.resistance
+            label_rewrite(resistors_resistances)
         
+            calculation_info[self.num - 1][2] = self.resistance
+            
+            rsave_info[self.num][8] = self.resistance
         self.ResistanceWindow.destroy()
     
     def Cancel_action(self, event):
@@ -238,6 +266,8 @@ class resistor:
         
         self.startpoint = closest_point_num
         
+        rsave_info[self.num][6] = self.startpoint       
+        
         calculation_info[self.num - 1][0] = self.startpoint
         
         delta_x = coord_points[closest_point_num][0] - self.data['x']
@@ -245,6 +275,9 @@ class resistor:
         
         self.xstart += delta_x
         self.ystart += delta_y        
+        
+        rsave_info[self.num][2] = self.xstart
+        rsave_info[self.num][3] = self.ystart
         
         ResistorCanvas.delete(self.line1)
         self.line1 = ResistorCanvas.create_line(self.xstart, self.ystart, self.xbody, self.ybody + 10, width = 3)        
@@ -268,7 +301,10 @@ class resistor:
         
             self.xstart += delta_x
             self.ystart += delta_y
-        
+            
+            rsave_info[self.num][2] = self.xstart
+            rsave_info[self.num][3] = self.ystart           
+            
             ResistorCanvas.move(self.get1, delta_x, delta_y)
         
             ResistorCanvas.delete(self.line1)
@@ -294,6 +330,8 @@ class resistor:
         
         self.endpoint = closest_point_num
         
+        rsave_info[self.num][7] = self.endpoint
+        
         calculation_info[self.num - 1][1] = self.endpoint
         
         delta_x = coord_points[closest_point_num][0] - self.data['x']
@@ -301,7 +339,10 @@ class resistor:
         
         self.xend += delta_x
         self.yend += delta_y
-    
+        
+        rsave_info[self.num][4] = self.xend
+        rsave_info[self.num][5] = self.yend       
+        
         ResistorCanvas.move(self.get2, delta_x, delta_y)
     
         ResistorCanvas.delete(self.line2)
@@ -326,7 +367,10 @@ class resistor:
             
             self.xend += delta_x
             self.yend += delta_y
-        
+            
+            rsave_info[self.num][4] = self.xend
+            rsave_info[self.num][5] = self.yend            
+            
             ResistorCanvas.move(self.get2, delta_x, delta_y)
             
             ResistorCanvas.delete(self.line2)
@@ -435,14 +479,67 @@ def GetAnswer(event):
     AnswerWindow.title('Answer')        
     
     total_resistance = calculation(calculation_info, ResistorNum, PointNum)
-    answer = Label(AnswerWindow, text = 'The total resistance of the circuit is\n' + str(total_resistance) + ' Ohm.')
+    answer = Label(AnswerWindow, text = 'The total resistance of the circuit is\n' + str(round(total_resistance, 3)) + ' Ohm.')
     answer.place(x = 0, y = 0, width = 200, height = 40) 
 
 def Help():
     showinfo('Help', 'Press button "Create resistor" to create resistors.\nPress button "Create point" to create connecting points.\nPress left mouse button to move resistors and connecting points.\nPress right mouse button to change resistance of resistor.\nPress button "Get answer" to get total resistans of the circuit.')
 
 def About():
-    showinfo('About', 'Product: Resistor\n\nVersion: 1.0\n\nRelease date: 25.11.2017\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
+    showinfo('About', 'Product: Resistor\n\nVersion: 1.1.1\n\nRelease date: 27.11.2017\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
+
+def Save():
+    global rsave_info, psave_info, ResistorNum, PointNum
+    file_to_save = open('Save.txt', 'w')
+    file_to_save.write(str(PointNum) + '\n')
+    for i in range(PointNum):
+        for j in range(3):
+            psave_info[i][j] = str(psave_info[i][j])        
+        file_to_save.write(' '.join(psave_info[i]) + '\n')
+    file_to_save.write(str(ResistorNum - 1) + '\n')
+    for i in range(1, ResistorNum):
+        for j in range(9):
+            rsave_info[i][j] = str(rsave_info[i][j])
+        file_to_save.write(' '.join(rsave_info[i]) + '\n')    
+    file_to_save.close()
+
+def Load():
+    global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, Resistor
+    file_to_load = open('Save.txt', 'r')
+    PointNum = int(file_to_load.readline())
+    for i in range(PointNum):
+        line = list(map(str, file_to_load.readline().split()))
+        if line[2] == 'black':
+            for j in range(2):
+                line[j] = int(line[j])
+            new_one = point()
+            new_one.num = i
+            new_one.xpoint = line[0]
+            new_one.ypoint = line[1]
+            
+            coord_points.append([new_one.xpoint, new_one.ypoint])
+        
+            new_one.load_point(ResistorCanvas, Resistor)
+    ResistorNum = int(file_to_load.readline()) + 1
+    for i in range (1, ResistorNum):
+        line = list(map(float, file_to_load.readline().split()))
+        
+        for j in range(7):
+            line[j] = int(line[j])
+        
+        new_one = resistor()
+        new_one.num = i
+        new_one.xbody = line[0]
+        new_one.ybody = line[1]
+        new_one.xstart = line[2]
+        new_one.ystart = line[3]
+        new_one.xend = line[4]
+        new_one.yend = line[5]
+        new_one.startpoint = line[6]
+        new_one.endpoint = line[7]
+        new_one.resistance = line[8]
+        
+        new_one.load(ResistorCanvas, Resistor)
 
 CreateInPoint()
 CreateOutPoint()
@@ -461,6 +558,11 @@ getanswer.place(x = 0, y = 360, width = 200, height = 40)
 
 menu = Menu(Resistor)
 Resistor.config(menu = menu)
+
+file_menu = Menu(menu)
+menu.add_cascade(label = 'File', menu = file_menu)
+file_menu.add_command(label = 'Save', command = Save)
+file_menu.add_command(label = 'Load', command = Load)
 
 help_menu = Menu(menu)
 menu.add_cascade(label = 'Help', menu = help_menu)
