@@ -2,6 +2,7 @@ from tkinter import Tk, Toplevel, Frame, Button, Label, Entry, Menu, Canvas
 from tkinter.messagebox import showinfo
 import scipy
 import numpy
+import os
 
 Resistor = Tk()
 Resistor.minsize(width = 600, height = 400)
@@ -45,7 +46,7 @@ def label_rewrite(resistors_resistances):
     for i in range (len(resistors_resistances)):
         in_text += 'R' + str(i + 1) + ' = ' + str(resistors_resistances[i]) + ' Ohm.\n'
                 
-    resistance_label.configure(text = in_text)
+    resistance_label.configure(text = in_text, justify = 'left', anchor = 'nw')
 
 class point:
     num = 0
@@ -486,10 +487,11 @@ def Help():
     showinfo('Help', 'Press button "Create resistor" to create resistors.\nPress button "Create point" to create connecting points.\nPress left mouse button to move resistors and connecting points.\nPress right mouse button to change resistance of resistor.\nPress button "Get answer" to get total resistans of the circuit.')
 
 def About():
-    showinfo('About', 'Product: Resistor\n\nVersion: 1.1.1\n\nRelease date: 27.11.2017\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
+    showinfo('About', 'Product: Resistor\n\nVersion: 1.2.4\n\nRelease date: 06.12.2017\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
 
 def Save():
     global rsave_info, psave_info, ResistorNum, PointNum
+    os.chmod('Save.txt', 666)
     file_to_save = open('Save.txt', 'w')
     file_to_save.write(str(PointNum) + '\n')
     for i in range(PointNum):
@@ -502,24 +504,28 @@ def Save():
             rsave_info[i][j] = str(rsave_info[i][j])
         file_to_save.write(' '.join(rsave_info[i]) + '\n')    
     file_to_save.close()
+    os.chmod('Save.txt', 777)
 
 def Load():
     global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, Resistor
+    
+    Clear()
+    
     file_to_load = open('Save.txt', 'r')
     PointNum = int(file_to_load.readline())
     for i in range(PointNum):
         line = list(map(str, file_to_load.readline().split()))
-        if line[2] == 'black':
-            for j in range(2):
-                line[j] = int(line[j])
-            new_one = point()
-            new_one.num = i
-            new_one.xpoint = line[0]
-            new_one.ypoint = line[1]
+        for j in range(2):
+            line[j] = int(line[j])
+        new_one = point()
+        new_one.num = i
+        new_one.xpoint = line[0]
+        new_one.ypoint = line[1]
+        new_one.color = line[2]
             
-            coord_points.append([new_one.xpoint, new_one.ypoint])
+        coord_points.append([new_one.xpoint, new_one.ypoint])
         
-            new_one.load_point(ResistorCanvas, Resistor)
+        new_one.load_point(ResistorCanvas, Resistor)
     ResistorNum = int(file_to_load.readline()) + 1
     for i in range (1, ResistorNum):
         line = list(map(float, file_to_load.readline().split()))
@@ -540,6 +546,32 @@ def Load():
         new_one.resistance = line[8]
         
         new_one.load(ResistorCanvas, Resistor)
+
+def Clear():
+    global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, coord_points, resistors_resistances, calculation_info
+    ResistorCanvas.delete('all')
+    
+    coord_points = []
+    resistors_resistances = []
+    calculation_info = []
+    
+    psave_info = []
+    rsave_info = ['#']
+    
+    ResistorNum = 1
+    PointNum = 0    
+    
+    resistance_label.configure(text = 'There are no resistors', justify = 'center', anchor = 'center')
+
+def New_canvas():
+    global coord_points
+    
+    Clear()
+    
+    coord_points = [[10, 200], [390, 200]]
+    
+    CreateInPoint()
+    CreateOutPoint()    
 
 CreateInPoint()
 CreateOutPoint()
@@ -563,6 +595,7 @@ file_menu = Menu(menu)
 menu.add_cascade(label = 'File', menu = file_menu)
 file_menu.add_command(label = 'Save', command = Save)
 file_menu.add_command(label = 'Load', command = Load)
+file_menu.add_command(label = 'Clear', command = New_canvas)
 
 help_menu = Menu(menu)
 menu.add_cascade(label = 'Help', menu = help_menu)
