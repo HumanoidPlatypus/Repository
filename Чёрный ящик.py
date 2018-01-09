@@ -1,31 +1,52 @@
-from tkinter import Tk, Toplevel, Frame, Button, Label, Entry, Menu, Canvas, BooleanVar, Checkbutton
+from tkinter import Tk, Toplevel, Frame, Button, Label, Entry, Menu, Canvas
 from tkinter.messagebox import showinfo
+from decimal import *
 import scipy
 import numpy
 import os
 
 Resistor = Tk()
-Resistor.minsize(width = 600, height = 400)
-Resistor.maxsize(width = 600, height = 400)
-Resistor.title('Resistor')
+Resistor.minsize(width = 1000, height = 400)
+Resistor.maxsize(width = 1000, height = 400)
+Resistor.title('Black Box')
 
 ResistorCanvas = Canvas(Resistor)
-ResistorCanvas.place(x = 0, y = 0, width = 400, height = 400)
+ResistorCanvas.place(x = 400, y = 0, width = 400, height = 400)
+
+BlackBox = Canvas(Resistor)
+BlackBox.place(x = 0, y = 0, width = 400, height = 400)
+
+minRN = 1#max ResistorNum
+maxRN = 0#min ResistorNum
+are = False#all resistors are equal
+
+BlackBox_loaded = False
+BlackBox_resistance = 0
+Battery_power = 0
+
+BatteryWindow = 0
+bat_info = 0
+bat_input = 0
+
+A = 0
 
 ResistorButtons = Frame(Resistor)
-ResistorButtons.place(x = 400, y = 0, width = 400, height = 400)
+ResistorButtons.place(x = 800, y = 0, width = 400, height = 400)
+
+getanswer = Button(ResistorButtons, text = 'Get answer', fg = 'grey')
+getanswer.place(x = 0, y = 360, width = 200, height = 40)
 
 resistance_label = Label(ResistorButtons, text = 'There are no resistors')
 resistance_label.place(x = 0, y = 80, width = 200, height = 280)
 
-clamp_num = 2
-clamp_1 = 0
-clamp_2 = 0
-ClampsWindow = 0
+clamp_num = 0
 
-coord_points = [[10, 200], [380, 200]]
+coord_points_inBB = [[60, 240], [100, 240]]
+coord_points = [[10, 200], [390, 200]]
 resistors_resistances = []
 calculation_info = []
+
+ans_list = []
 
 psave_info = []
 rsave_info = ['#']
@@ -52,6 +73,144 @@ def label_rewrite(resistors_resistances):
         in_text += 'R' + str(i + 1) + ' = ' + str(resistors_resistances[i]) + ' Ohm.\n'
                 
     resistance_label.configure(text = in_text, justify = 'left', anchor = 'nw')
+
+class ammeter():
+    xstart = 60
+    ystart = 355
+    xend = 340
+    yend = 355
+    
+    startpoint = -1
+    endpoint = -1  
+    
+    data = {'x': 0, 'y': 0}
+    
+    def draw(self):
+        ammeter = BlackBox.create_oval(125, 380, 175, 330, width = 3, fill = 'white', tags = 'ammeter')
+        ammeter_text = BlackBox.create_text(150, 355, text = 'A', justify = 'center', font = 'Arial 30', tags = 'ammeter')
+        BlackBox.tag_bind('ammeter', '<Button-1>', get_from_ammeter)
+        
+        battery = BlackBox.create_rectangle(245, 330, 255, 380, width = 0, tags = 'battery')
+        battery_line1 = BlackBox.create_line(255, 330, 255, 380, width = 3, tags = 'battery')
+        battery_line1 = BlackBox.create_line(245, 340, 245, 370, width = 3, tags = 'battery')
+        BlackBox.tag_bind('battery', '<Button-1>', input_battery)
+        
+        horisontal_line1 = BlackBox.create_line(60, 355, 125, 355, width = 3)
+        horisontal_line2 = BlackBox.create_line(175, 355, 245, 355, width = 3)
+        horisontal_line3 = BlackBox.create_line(255, 355, 340, 355, width = 3)
+        
+        self.line1 = BlackBox.create_line(self.xstart, self.ystart, 60, 355, width = 3)
+        self.line2 = BlackBox.create_line(340, 355, self.xend, self.yend, width = 3)
+        self.white_round1 = BlackBox.create_oval(60 + 3, 355 + 3, 60 - 3, 355 - 3, width = 3, fill = 'white')
+        self.white_round2 = BlackBox.create_oval(340 + 3, 355 + 3, 340 - 3, 355 - 3, width = 3, fill = 'white')
+        self.get1 = BlackBox.create_oval(self.xstart + 3, self.ystart + 3, self.xstart - 3, self.ystart - 3, width = 0, tags = 'get1', fill = 'black')
+        self.get2 = BlackBox.create_oval(self.xend + 3, self.yend + 3, self.xend - 3, self.yend - 3, width = 0, tags = 'get2', fill = 'black')      
+        
+        BlackBox.tag_bind('get1', '<ButtonPress-1>', self.get1_press)
+        BlackBox.tag_bind('get1', '<ButtonRelease-1>', self.get1_release)
+        BlackBox.tag_bind('get1', '<B1-Motion>', self.get1_motion)
+    
+        BlackBox.tag_bind('get2', '<ButtonPress-1>', self.get2_press)
+        BlackBox.tag_bind('get2', '<ButtonRelease-1>', self.get2_release)
+        BlackBox.tag_bind('get2', '<B1-Motion>', self.get2_motion)  
+    
+    def get1_press(self, event):
+        self.data['x'] = event.x
+        self.data['y'] = event.y
+    
+    def get1_release(self, event):
+        global coord_points_inBB
+        
+        closest_point_num = closest_item(self.data['x'], self.data['y'], coord_points_inBB)
+        
+        self.startpoint = closest_point_num
+        
+        delta_x = coord_points_inBB[closest_point_num][0] - self.data['x']
+        delta_y = coord_points_inBB[closest_point_num][1] - self.data['y']        
+        
+        self.xstart += delta_x
+        self.ystart += delta_y        
+        
+        BlackBox.delete(self.line1)
+        self.line1 = BlackBox.create_line(self.xstart, self.ystart, 60, 355, width = 3)       
+        
+        self.data['x'] = 0
+        self.data['y'] = 0
+        
+        BlackBox.delete(self.get1)
+        self.get1 = BlackBox.create_oval(self.xstart + 3, self.ystart + 3, self.xstart - 3, self.ystart - 3, width = 0, tags = 'get1', fill = 'black')
+        
+        BlackBox.delete(self.white_round1)
+        self.white_round1 = BlackBox.create_oval(60 + 3, 355 + 3, 60 - 3, 355 - 3, width = 3, fill = 'white')
+        
+    def get1_motion(self, event):
+        if event.x > 0 and event.x < 400 and event.y > 0 and event.y < 400:
+            delta_x = event.x - self.data['x']
+            delta_y = event.y - self.data['y']
+        
+            self.xstart += delta_x
+            self.ystart += delta_y          
+            
+            BlackBox.move(self.get1, delta_x, delta_y)
+        
+            BlackBox.delete(self.line1)
+            self.line1 = BlackBox.create_line(self.xstart, self.ystart, 60, 355, width = 3)       
+      
+            BlackBox.delete(self.white_round1)
+            self.white_round1 = BlackBox.create_oval(60 + 3, 355 + 3, 60 - 3, 355 - 3, width = 3, fill = 'white')            
+        
+            self.data['x'] = event.x
+            self.data['y'] = event.y  
+    
+    def get2_press(self, event):
+        self.data['x'] = event.x
+        self.data['y'] = event.y
+    
+    def get2_release(self, event):
+        global coord_points_inBB
+    
+        closest_point_num = closest_item(self.data['x'], self.data['y'], coord_points_inBB)
+        
+        self.endpoint = closest_point_num
+        
+        delta_x = coord_points_inBB[closest_point_num][0] - self.data['x']
+        delta_y = coord_points_inBB[closest_point_num][1] - self.data['y']        
+        
+        self.xend += delta_x
+        self.yend += delta_y       
+        
+        BlackBox.move(self.get2, delta_x, delta_y)
+    
+        BlackBox.delete(self.line2)
+        self.line2 = BlackBox.create_line(340, 355, self.xend, self.yend, width = 3)        
+        
+        self.data['x'] = 0
+        self.data['y'] = 0
+        
+        BlackBox.delete(self.get2)
+        self.get2 = BlackBox.create_oval(self.xend + 3, self.yend + 3, self.xend - 3, self.yend - 3, width = 0, tags = 'get2', fill = 'black')
+        
+        BlackBox.delete(self.white_round2)
+        self.white_round2 = BlackBox.create_oval(340 + 3, 355 + 3, 340 - 3, 355 - 3, width = 3, fill = 'white')
+    
+    def get2_motion(self, event):
+        if event.x > 0 and event.x < 400 and event.y > 0 and event.y < 400:
+            delta_x = event.x - self.data['x']
+            delta_y = event.y - self.data['y']
+            
+            self.xend += delta_x
+            self.yend += delta_y          
+            
+            BlackBox.move(self.get2, delta_x, delta_y)
+            
+            BlackBox.delete(self.line2)
+            self.line2 = BlackBox.create_line(340, 355, self.xend, self.yend, width = 3)       
+        
+            self.data['x'] = event.x
+            self.data['y'] = event.y 
+            
+            BlackBox.delete(self.white_round2)
+            self.white_round2 = BlackBox.create_oval(340 + 3, 355 + 3, 340 - 3, 355 - 3, width = 3, fill = 'white')            
 
 class point:
     num = 0
@@ -108,8 +267,8 @@ class point:
     
 class resistor:
     num = 1
-    xbody = 170
-    ybody = 190
+    xbody = 180
+    ybody = 10
     xstart = 0
     ystart = 0
     xend = 0
@@ -502,7 +661,6 @@ def CreatePoint_8():
     PointNum += 1
     new_one.load_point(ResistorCanvas, Resistor)
 
-
 def calculation(calculation_info, ResistorNum, PointNum, s, f):
     N = PointNum
     M = ResistorNum - 1
@@ -552,97 +710,42 @@ def calculation(calculation_info, ResistorNum, PointNum, s, f):
     ansR = EMF / currentsum
     return ansR
 
-def clamp_OK_action(event):
-    global clamp_1, clamp_2, ClampsWindow, clamp_num
-    try:
-        s = int(clamp_1.get()) - 1
-        f = int(clamp_2.get()) - 1
-        
-        if 0 > s or 0 > f or clamp_num - 1 < f or clamp_num - 1 < f:
-            raise ValueError
-        GetAnswer_in_GetAnswer(min(s, f), max(s, f))
-        
-        ClampsWindow.destroy()
-    except ValueError:
-        pass
-
 def GetAnswer(event):
-    global clamp_1, clamp_2, ClampsWindow
-    if clamp_num > 2:
-        ClampsWindow = Toplevel(Resistor)
-        ClampsWindow.grab_set()
-        ClampsWindow.focus_force()
-        ClampsWindow.minsize(width = 200, height = 160)
-        ClampsWindow.maxsize(width = 200, height = 160)
-        ClampsWindow.title('Choose clamps')
-        
-        clamp_1_info = Label(ClampsWindow, text = 'Enter the number\nof the first clamp:')
-        clamp_1_info.place(x = 0, y = 0, width = 200, height = 40)
-    
-        clamp_1 = Entry(ClampsWindow)
-        clamp_1.place(x = 0, y = 40, width = 200, height = 20)
-        
-        clamp_2_info = Label(ClampsWindow, text = 'Enter the number\nof the second clamp:')
-        clamp_2_info.place(x = 0, y = 60, width = 200, height = 40)
-    
-        clamp_2 = Entry(ClampsWindow)
-        clamp_2.place(x = 0, y = 100, width = 200, height = 20)
-        
-        clamp_OK_but = Button(ClampsWindow, text = 'OK')
-        clamp_OK_but.place(x = 0, y = 120, width = 200, height = 40)
-        clamp_OK_but.bind('<Button-1>', clamp_OK_action)        
-    else:
-        GetAnswer_in_GetAnswer(0, 1)
-
-def GetAnswer_in_GetAnswer(s, f):
-    global calculation_info, ResistorNum, PointNum, clamp_num
+    global calculation_info, ResistorNum, PointNum, BlackBox_resistance, minRN, maxRN, are, resistors_resistances, ans_list;
     
     AnswerWindow = Toplevel(Resistor)
     AnswerWindow.grab_set()
     AnswerWindow.focus_force()
     AnswerWindow.minsize(width = 200, height = 40)
     AnswerWindow.maxsize(width = 200, height = 40)
-    AnswerWindow.title('Answer')         
+    AnswerWindow.title('Answer')        
     
-    total_resistance = calculation(calculation_info, ResistorNum, PointNum, s, f)
-    answer = Label(AnswerWindow, text = 'The total resistance of the circuit is\n' + str(round(total_resistance, 3)) + ' Ohm.')
+    if are:
+        f = True
+        if resistors_resistances != [resistors_resistances[0] for i in range (ResistorNum - 1)]:
+            f = False
+    else:
+        f = True
+    
+    try_list = []
+    for i in range (0, clamp_num):
+        try_list.append([])
+        for j in range (i + 1, clamp_num):
+            try_list[i].append(calculation(calculation_info, ResistorNum, PointNum, i, j))    
+    if try_list == ans_list and f and ResistorNum - 1 >= minRN and (ResistorNum - 1 <= maxRN or maxRN == 0):
+        answer = Label(AnswerWindow, text = 'Correct')
+    else:
+        answer = Label(AnswerWindow, text = 'Incorrect')
     answer.place(x = 0, y = 0, width = 200, height = 40) 
 
 def Help():
     showinfo('Help', 'Press button "Create resistor" to create resistors.\nPress button "Create point" to create connecting points.\nPress left mouse button to move resistors and connecting points.\nPress right mouse button to change resistance of resistor.\nPress button "Get answer" to get total resistans of the circuit.\n\nIn "File" menu:\nPress "Save" to save your circuit.\nPress "Load" to load your old circuit.\nPress "Clear" to delete all elements in your circuit.')
 
 def About():
-    showinfo('About', 'Product: Resistor\n\nVersion: 1.6.3.2\n\nRelease date: 03.01.2017\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
-
-def Save():
-    global rsave_info, psave_info, ResistorNum, PointNum, are, resistors_resistances, clamp_num
-    os.chmod('Save.txt', 666)
-    file_to_save = open('Save.txt', 'w')
-    file_to_save.write(str(clamp_num) + '\n')
-    file_to_save.write(str(PointNum) + '\n')
-    for i in range(PointNum):
-        for j in range(3):
-            psave_info[i][j] = str(psave_info[i][j])        
-        file_to_save.write(' '.join(psave_info[i]) + '\n')
-    file_to_save.write(str(ResistorNum - 1) + '\n')
-    for i in range(1, ResistorNum):
-        for j in range(9):
-            rsave_info[i][j] = str(rsave_info[i][j])
-        file_to_save.write(' '.join(rsave_info[i]) + '\n')
-    are = True#all resistors are equal
-    if resistors_resistances != [resistors_resistances[0] for i in range (ResistorNum - 1)]:
-        are = False    
-    if are:
-        file_to_save.write('3\nare\n')
-    else:
-        file_to_save.write('2\n')
-    file_to_save.write('minRN ' + str(ResistorNum - 1) + '\n')
-    file_to_save.write('maxRN ' + str(ResistorNum - 1) + '\n')
-    file_to_save.close()
-    os.chmod('Save.txt', 777)
+    showinfo('About', 'Product: Black Box\n\nVersion: 0.6.1\n\nRelease date: 03.01.2018\n\nDevelopers:\nIgor Korkin\nkorkin170202@gmail.com\nArseniy Nestyuk\narseniy.nestyuk@gmail.com')
 
 def Load():
-    global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, Resistor, clamp_num
+    global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, Resistor, BlackBox_loaded, BlackBox_resistance, getanswer, minRN, maxRN, are, clamp_num, ans_list
     try:
         Clear()
         
@@ -682,8 +785,29 @@ def Load():
             new_one.resistance = line[8]
         
             new_one.load(ResistorCanvas, Resistor)
+        
+        condition_number = int(file_to_load.readline())
+        for i in range (condition_number):
+            line = file_to_load.readline().split()
+            if line[0] == 'are':
+                are = True
+            elif line[0] == 'minRN':
+                minRN = int(line[1])
+            elif line[0] == 'maxRN':
+                maxRN = int(line[1])
+        
+        BlackBox_loaded = True
+        for i in range (0, clamp_num):
+            ans_list.append([])
+            for j in range (i + 1, clamp_num):
+                ans_list[i].append(calculation(calculation_info, ResistorNum, PointNum, i, j))
+        
+        getanswer.configure(fg = 'black')
+        getanswer.bind('<Button-1>', GetAnswer)
+        
+        New_canvas()
     except:
-        two_clamps()
+        New_canvas()
 
 def Clear():
     global rsave_info, psave_info, ResistorNum, PointNum, ResistorCanvas, coord_points, resistors_resistances, calculation_info
@@ -700,6 +824,177 @@ def Clear():
     PointNum = 0    
     
     resistance_label.configure(text = 'There are no resistors', justify = 'center', anchor = 'center')
+
+def New_canvas():
+    global coord_points, classmethod
+    
+    Clear()
+    
+    coord_points = [[10, 200], [390, 200]]
+    
+    if clamp_num == 2:
+        two_clamps()
+    if clamp_num == 3:
+        three_clamps()
+    if clamp_num == 4:
+        four_clamps()
+    if clamp_num == 5:
+        five_clamps()
+    if clamp_num == 6:
+        six_clamps()
+    if clamp_num == 7:
+        seven_clamps()
+    if clamp_num == 8:
+        eight_clamps()    
+
+def get_from_ammeter(event):
+    global Resistor, BlackBox_loaded, BlackBox_resistance, A, ans_list
+    
+    AmmeterWindow = Toplevel(Resistor)
+    AmmeterWindow.grab_set()
+    AmmeterWindow.focus_force()
+    AmmeterWindow.minsize(width = 200, height = 40)
+    AmmeterWindow.maxsize(width = 200, height = 40)
+    AmmeterWindow.title('Current strength')
+    
+    Ammeterlabel = Label(AmmeterWindow)
+    Ammeterlabel.place(x = 0, y = 0, width = 200, height = 40)
+    
+    if not BlackBox_loaded:
+        Ammeterlabel.configure(text = 'There are no circuit')
+    elif Battery_power == 0:
+        Ammeterlabel.configure(text = 'There are no battery')
+    elif A.startpoint == -1 or A.endpoint == -1:
+        Ammeterlabel.configure(text = 'The circuit is not connected')
+    elif A.startpoint == A.endpoint:
+        Ammeterlabel.configure(text = 'The ammeter does not work.\nThis is strange.')
+    else:
+        Ammeterlabel.configure(text = 'Current strenth is\n' + str(Battery_power / ans_list[min(A.startpoint, A.endpoint)][max(A.startpoint, A.endpoint) - min(A.startpoint, A.endpoint) - 1]) + ' amps.')
+    
+def input_battery(event):
+    global Resistor, Battery_power, BatteryWindow, bat_info, bat_input
+    
+    BatteryWindow = Toplevel(Resistor)
+    BatteryWindow.grab_set()
+    BatteryWindow.focus_force()
+    BatteryWindow.minsize(width = 200, height = 100)
+    BatteryWindow.maxsize(width = 200, height = 100)
+    BatteryWindow.title('Change resistance')        
+
+    bat_info = Label(BatteryWindow, text = 'Enter the EMF\nof the battery (in Volts):')
+    bat_info.place(x = 0, y = 0, width = 200, height = 40)
+
+    bat_input = Entry(BatteryWindow)
+    bat_input.place(x = 0, y = 40, width = 200, height = 20)
+
+    bat_OK_but = Button(BatteryWindow, text = 'OK')
+    bat_OK_but.place(x = 0, y = 60, width = 100, height = 40)
+    bat_OK_but.bind('<Button-1>', bat_OK_action)
+
+    bat_Cancel_but = Button(BatteryWindow, text = 'Cancel')
+    bat_Cancel_but.place(x = 100, y = 60, width = 100, height = 40)
+    bat_Cancel_but.bind('<Button-1>', bat_Cancel_action)
+
+def bat_OK_action(event):
+    global Battery_power, BatteryWindow, bat_info, bat_input      
+
+    try:
+        resistance_in = float(bat_input.get())
+        
+        if resistance_in <= 0:
+            raise ValueError
+        
+        Battery_power = resistance_in
+        
+        BatteryWindow.destroy()
+    except ValueError:
+        BatteryWindow.destroy()
+
+def bat_Cancel_action(event):
+    global BatteryWindow
+    BatteryWindow.destroy()
+    
+def create_BlackBox():
+    global BlackBox, clamp_num ,coord_points_inBB, A
+    
+    box = BlackBox.create_rectangle(20, 20, 380, 200, width = 0, fill = 'black')
+    box_text = BlackBox.create_text(200, 110, text = 'Black\nBox', justify = 'center', fill = 'white', font = 'Arial 30')
+    
+    BBline = BlackBox.create_line(60, 200, 60, 240, width = 3)
+    BBpoint = BlackBox.create_oval(60 + 4, 240 + 4, 60 - 4, 240 - 4, width = 0, fill = 'red')
+    BBline = BlackBox.create_line(100, 200, 100, 240, width = 3)
+    BBpoint = BlackBox.create_oval(100 + 4, 240 + 4, 100 - 4, 240 - 4, width = 0, fill = 'red')    
+    if clamp_num > 2:
+        BBline = BlackBox.create_line(140, 200, 140, 240, width = 3)
+        BBpoint = BlackBox.create_oval(140 + 4, 240 + 4, 140 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([140, 240]) 
+    else:
+        BBline = BlackBox.create_line(140, 200, 140, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(140 + 4, 240 + 4, 140 - 4, 240 - 4, width = 0, fill = 'grey')        
+    if clamp_num > 3:
+        BBline = BlackBox.create_line(180, 200, 180, 240, width = 3)
+        BBpoint = BlackBox.create_oval(180 + 4, 240 + 4, 180 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([180, 240])
+    else:
+        BBline = BlackBox.create_line(180, 200, 180, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(180 + 4, 240 + 4, 180 - 4, 240 - 4, width = 0, fill = 'grey')         
+    if clamp_num > 4:
+        BBline = BlackBox.create_line(220, 200, 220, 240, width = 3)
+        BBpoint = BlackBox.create_oval(220 + 4, 240 + 4, 220 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([220, 240])
+    else:
+        BBline = BlackBox.create_line(220, 200, 220, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(220 + 4, 240 + 4, 220 - 4, 240 - 4, width = 0, fill = 'grey')        
+    if clamp_num > 5:
+        BBline = BlackBox.create_line(260, 200, 260, 240, width = 3)
+        BBpoint = BlackBox.create_oval(260 + 4, 240 + 4, 260 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([260, 240])
+    else:
+        BBline = BlackBox.create_line(260, 200, 260, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(260 + 4, 240 + 4, 260 - 4, 240 - 4, width = 0, fill = 'grey')         
+    if clamp_num > 6:
+        BBline = BlackBox.create_line(300, 200, 300, 240, width = 3)
+        BBpoint = BlackBox.create_oval(300 + 4, 240 + 4, 300 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([300, 240])
+    else:
+        BBline = BlackBox.create_line(300, 200, 300, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(300 + 4, 240 + 4, 300 - 4, 240 - 4, width = 0, fill = 'grey')        
+    if clamp_num > 7:
+        BBline = BlackBox.create_line(340, 200, 340, 240, width = 3)
+        BBpoint = BlackBox.create_oval(340 + 4, 240 + 4, 340 - 4, 240 - 4, width = 0, fill = 'red')
+        coord_points_inBB.append([340, 240])
+    else:
+        BBline = BlackBox.create_line(340, 200, 340, 240, width = 3, fill = 'grey')
+        BBpoint = BlackBox.create_oval(340 + 4, 240 + 4, 340 - 4, 240 - 4, width = 0, fill = 'grey')
+        
+    '''
+    box_line1 = BlackBox.create_line(20, 150, 100, 150, width = 3)
+    box_line2 = BlackBox.create_line(380, 150, 300, 150, width = 3)
+    
+    s_ammeter_point = BlackBox.create_oval(60 + 4, 150 + 4, 60 - 4, 150 - 4, width = 0, fill = 'black')
+    s_ammeter_point = BlackBox.create_oval(340 + 4, 150 + 4, 340 - 4, 150 - 4, width = 0, fill = 'black')
+    ammeter_vertical_line1 = BlackBox.create_line(60, 150, 60, 325, width = 3)
+    ammeter_vertical_line2 = BlackBox.create_line(340, 150, 340, 325, width = 3)
+    
+    ammeter = BlackBox.create_oval(125, 350, 175, 300, width = 3, fill = 'white', tags = 'ammeter')
+    ammeter_text = BlackBox.create_text(150, 325, text = 'A', justify = 'center', font = 'Arial 30', tags = 'ammeter')
+    BlackBox.tag_bind('ammeter', '<Button-1>', get_from_ammeter)
+    
+    battery = BlackBox.create_rectangle(245, 300, 255, 350, width = 0, tags = 'battery')
+    battery_line1 = BlackBox.create_line(255, 300, 255, 350, width = 3, tags = 'battery')
+    battery_line1 = BlackBox.create_line(245, 310, 245, 340, width = 3, tags = 'battery')
+    BlackBox.tag_bind('battery', '<Button-1>', input_battery)
+    
+    horisontal_line1 = BlackBox.create_line(60 - 1.5, 325, 125, 325, width = 3)
+    horisontal_line2 = BlackBox.create_line(175, 325, 245, 325, width = 3)
+    horisontal_line3 = BlackBox.create_line(255, 325, 340 + 1.5, 325, width = 3)
+    
+    s_point = BlackBox.create_oval(20 + 4, 150 + 4, 20 - 4, 150 - 4, width = 0, fill = 'red')
+    f_point = BlackBox.create_oval(380 + 4, 150 + 4, 380 - 4, 150 - 4, width = 0, fill = 'blue')
+    '''
+    
+    A = ammeter()
+    A.draw()
 
 def two_clamps():
     global coord_points, clamp_num
@@ -797,10 +1092,9 @@ def eight_clamps():
     CreatePoint_5()
     CreatePoint_6()
     CreatePoint_7()
-    CreatePoint_8()    
+    CreatePoint_8()
 
-CreatePoint_1()
-CreatePoint_2()
+Load() 
 
 createresistor = Button(ResistorButtons, text = 'Create resistor')
 createresistor.bind('<Button-1>', CreateResistor)
@@ -810,31 +1104,18 @@ createpoint = Button(ResistorButtons, text = 'Create point')
 createpoint.bind('<Button-1>', CreatePoint)
 createpoint.place(x = 0, y = 40, width = 200, height = 40)
 
-getanswer = Button(ResistorButtons, text = 'Get answer')
-getanswer.bind('<Button-1>', GetAnswer)
-getanswer.place(x = 0, y = 360, width = 200, height = 40)
-
 menu = Menu(Resistor)
 Resistor.config(menu = menu)
 
 file_menu = Menu(menu)
 menu.add_cascade(label = 'File', menu = file_menu)
-file_menu.add_command(label = 'Save', command = Save)
-file_menu.add_command(label = 'Load', command = Load)
+file_menu.add_command(label = 'Clear', command = New_canvas)
 
 help_menu = Menu(menu)
 menu.add_cascade(label = 'Help', menu = help_menu)
 help_menu.add_command(label = 'Help', command = Help)
-help_menu.add_command(label = 'About', command = About)
+help_menu.add_command(label = 'About', command = About)     
 
-clamps_menu = Menu(menu)
-menu.add_cascade(label = 'Clamps', menu = clamps_menu)
-clamps_menu.add_command(label = 'Two clamps', command = two_clamps)
-clamps_menu.add_command(label = 'Three clamps', command = three_clamps)
-clamps_menu.add_command(label = 'Four clamps', command = four_clamps)
-clamps_menu.add_command(label = 'Five clamps', command = five_clamps)
-clamps_menu.add_command(label = 'Six clamps', command = six_clamps)
-clamps_menu.add_command(label = 'Seven clamps', command = seven_clamps)
-clamps_menu.add_command(label = 'Eight clamps', command = eight_clamps)
+create_BlackBox()
 
 Resistor.mainloop()
